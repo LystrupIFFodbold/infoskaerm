@@ -189,6 +189,7 @@
     filter: url(#sharpen) contrast(1.1) saturate(1.1);
   }
 
+
   /* ─── SPONSOR BAR ─── */
   .sponsor-bar {
     grid-column: 1 / -1; grid-row: 3;
@@ -267,7 +268,7 @@
     </div>
   </section>
 
-  <!-- HØJRE: baneoversigt -->
+  <!-- HØJRE: baneoversigt + kampe i morgen -->
   <div class="right-col">
     <section class="field-panel">
       <div class="panel-title" style="margin-bottom:0;">
@@ -327,9 +328,9 @@ updateClock();
 // ─── VEJR + VIND ───
 async function fetchWeather() {
   try {
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=56.19&longitude=10.22&current=temperature_2m,weathercode,windspeed_10m,winddirection_10m,windgusts_10m&timezone=Europe/Copenhagen');
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=56.19&longitude=10.22&current=temperature_2m,weather_code,windspeed_10m,winddirection_10m,windgusts_10m&timezone=Europe/Copenhagen');
     const d = await r.json();
-    const c = d.current.weathercode;
+    const c = d.current.weather_code ?? d.current.weathercode;
     const icons = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',51:'🌦️',61:'🌧️',71:'❄️',80:'🌦️',95:'⛈️'};
     const descs = {0:'Klart',1:'Næsten klart',2:'Delvist skyet',3:'Overskyet',45:'Tåge',51:'Let regn',61:'Regn',71:'Sne',80:'Regnbyger',95:'Tordenvejr'};
     document.getElementById('weather-icon').textContent = icons[c] || '🌡️';
@@ -456,13 +457,23 @@ function fixDansk(s) {
     .replace(/å/g,'å').replace(/Å/g,'Å');
 }
 
-function parseMatchesFromHTML(html, date) {
+function parseMatchesFromHTML(html, defaultDate) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const rows = doc.querySelectorAll('table tr');
   const matches = [];
+  let currentDate = defaultDate;
   rows.forEach(row => {
     const cells = row.querySelectorAll('td');
-    if (cells.length < 3) return;
+    // Detektér dato-overskriftsrækker fra DBU (fx "Lørdag 03-05-2026" eller "03.05.2026")
+    if (cells.length < 4) {
+      const rowText = row.textContent.trim();
+      const dm = rowText.match(/(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})/);
+      if (dm) {
+        const [, dd, mm, yyyy] = dm;
+        currentDate = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`);
+      }
+      return;
+    }
     const tid     = fixDansk(cells[0]?.textContent.trim());
     const aargang = fixDansk(cells[1]?.textContent.trim());
     const hold    = fixDansk(cells[2]?.textContent.trim());
@@ -502,49 +513,68 @@ function parseMatchesFromHTML(html, date) {
     const omklædnUde    = omklædnParts[1] || '';
     const omklædnDommer = omklædnParts.find(p => /dommer/i.test(p)) || '';
 
-    matches.push({ date, time: startTime, aargang, homeTeam, awayTeam,
+    matches.push({ date: currentDate, time: startTime, aargang, homeTeam, awayTeam,
       omklædnHjem, omklædnUde, omklædnDommer, bane });
   });
   return matches;
 }
 
 async function fetchMatches() {
-  const today    = new Date();
-  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-  const dayAfter = new Date(today); dayAfter.setDate(today.getDate() + 2);
+  const today = new Date();
 
-  const todStr = formatDate(today);
-  const tStr   = formatDate(tomorrow);
-  const dStr   = formatDate(dayAfter);
+  // Beregn datostrengen for de næste 3 dage
+  const nearDates = new Set();
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(today); d.setDate(today.getDate() + i);
+    nearDates.add(formatDate(d));
+  }
 
-  // Hent alle kampe fra matches.json (i dag + kommende)
-  let jsonMatches = [];
+  // Hent alle fremtidige kampe fra matches.json
+  let allJsonMatches = [];
   try {
     const r = await fetch('matches.json?' + Date.now());
     const data = await r.json();
-    jsonMatches = data
-      .filter(m => m.date === todStr || m.date === tStr || m.date === dStr)
+    const todayMidnight = new Date(today); todayMidnight.setHours(0,0,0,0);
+    allJsonMatches = data
       .map(m => {
         const [dd,mm,yyyy] = m.date.split('-');
         return { ...m, date: new Date(`${yyyy}-${mm}-${dd}`) };
-      });
+      })
+      .filter(m => { const d = new Date(m.date); d.setHours(0,0,0,0); return d >= todayMidnight; });
   } catch(e) {}
 
-  // Hent dagens kampe fra DBU (supplement — tilføjer kampe der ikke allerede er i matches.json)
+  // Prioriter de næste 3 dage — ellers vis de nærmest kommende kampe
+  let jsonMatches = allJsonMatches.filter(m => {
+    const [dd,mm,yyyy] = [
+      String(m.date.getDate()).padStart(2,'0'),
+      String(m.date.getMonth()+1).padStart(2,'0'),
+      m.date.getFullYear()
+    ];
+    return nearDates.has(`${dd}-${mm}-${yyyy}`);
+  });
+
+  if (jsonMatches.length === 0 && allJsonMatches.length > 0) {
+    // Ingen kampe de næste 3 dage — vis de næste MATCHES_PER_PAGE kommende
+    jsonMatches = allJsonMatches
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(0, MATCHES_PER_PAGE);
+  }
+
+  // Hent alle kampe fra DBU (supplement — inkl. fremtidige)
   let dbuMatches = [];
   const html = await fetchViaProxy(DBU_BASE);
   if (html) {
     const parsed = parseMatchesFromHTML(html, today);
-    // Deduplicér: udelad DBU-kampe der allerede findes i matches.json (samme tid + hjemmehold)
-    const jsonTodayKeys = new Set(
-      jsonMatches
-        .filter(m => { const d = new Date(m.date); d.setHours(0,0,0,0); const t = new Date(today); t.setHours(0,0,0,0); return d.getTime() === t.getTime(); })
-        .map(m => m.time + '|' + m.homeTeam.toLowerCase())
-    );
-    dbuMatches = parsed.filter(m => !jsonTodayKeys.has(m.time + '|' + m.homeTeam.toLowerCase()));
+    const jsonKeys = new Set(allJsonMatches.map(m => {
+      const d = new Date(m.date);
+      return formatDate(d) + '|' + m.time + '|' + m.homeTeam.toLowerCase();
+    }));
+    dbuMatches = parsed.filter(m => {
+      const key = formatDate(new Date(m.date)) + '|' + m.time + '|' + m.homeTeam.toLowerCase();
+      return !jsonKeys.has(key);
+    });
   }
 
-  // Sorter alle kampe kronologisk
   const allMatches = [...jsonMatches, ...dbuMatches].sort((a, b) => {
     const da = new Date(a.date); da.setHours(0,0,0,0);
     const db = new Date(b.date); db.setHours(0,0,0,0);
@@ -645,6 +675,7 @@ function showMatchPage(page) {
 function renderNoMatches() {
   document.getElementById('matches-list').innerHTML = '<div class="no-matches">Ingen kampe i dag 🏟️</div>';
 }
+
 
 fetchMatches();
 setInterval(fetchMatches, 900000);

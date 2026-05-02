@@ -327,43 +327,54 @@ setInterval(updateClock, 1000);
 updateClock();
 
 // ─── VEJR + VIND ───
-async function fetchWeather() {
+let _weatherRetry = 0;
+async function fetchWeatherWithRetry() {
   try {
-    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=56.19&longitude=10.22&current=temperature_2m,weather_code,windspeed_10m,winddirection_10m,windgusts_10m&timezone=Europe/Copenhagen');
-    const d = await r.json();
-    const c = d.current.weather_code ?? d.current.weathercode;
-    const icons = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',51:'🌦️',61:'🌧️',71:'❄️',80:'🌦️',95:'⛈️'};
-    const descs = {0:'Klart',1:'Næsten klart',2:'Delvist skyet',3:'Overskyet',45:'Tåge',51:'Let regn',61:'Regn',71:'Sne',80:'Regnbyger',95:'Tordenvejr'};
-    document.getElementById('weather-icon').textContent = icons[c] || '🌡️';
-    document.getElementById('weather-temp').textContent = Math.round(d.current.temperature_2m) + '°';
-    document.getElementById('weather-desc').textContent = descs[c] || '—';
-
-    const speed = Math.round(d.current.windspeed_10m / 3.6 * 10) / 10;
-    const gusts = Math.round(d.current.windgusts_10m / 3.6 * 10) / 10;
-    const deg   = d.current.winddirection_10m;
-    const dirs  = ['N','NNØ','NØ','ØNØ','Ø','ØSØ','SØ','SSØ','S','SSV','SV','VSV','V','VNV','NV','NNV'];
-    const dirLabel = dirs[Math.round(deg / 22.5) % 16];
-    let bf = '';
-    if (speed < 1) bf = 'Stille';
-    else if (speed < 6)  bf = 'Svag vind';
-    else if (speed < 12) bf = 'Let brise';
-    else if (speed < 20) bf = 'Svag brise';
-    else if (speed < 29) bf = 'Jævn brise';
-    else if (speed < 39) bf = 'Frisk brise';
-    else if (speed < 50) bf = 'Hård vind';
-    else bf = 'Stærk vind';
-
-    document.getElementById('wind-arrow').style.transform = `rotate(${(deg + 180) % 360}deg)`;
-    document.getElementById('wind-speed').textContent = speed + ' m/s';
-    document.getElementById('wind-dir').textContent = dirLabel;
-    document.getElementById('wind-gusts').textContent = 'Vindstød ' + gusts + ' m/s';
-    document.getElementById('wind-beaufort').textContent = bf;
+    await fetchWeather();
+    _weatherRetry = 0;
   } catch(e) {
-    document.getElementById('weather-desc').textContent = 'Ingen data';
+    _weatherRetry++;
+    const delay = _weatherRetry <= 5 ? 30000 : 600000;
+    setTimeout(fetchWeatherWithRetry, delay);
+    return;
   }
 }
-fetchWeather();
-setInterval(fetchWeather, 600000);
+
+async function fetchWeather() {
+  const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude=56.19&longitude=10.22&current=temperature_2m,weather_code,windspeed_10m,winddirection_10m,windgusts_10m&timezone=Europe/Copenhagen');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  const c = d.current.weather_code ?? d.current.weathercode;
+  const icons = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',51:'🌦️',61:'🌧️',71:'❄️',80:'🌦️',95:'⛈️'};
+  const descs = {0:'Klart',1:'Næsten klart',2:'Delvist skyet',3:'Overskyet',45:'Tåge',51:'Let regn',61:'Regn',71:'Sne',80:'Regnbyger',95:'Tordenvejr'};
+  document.getElementById('weather-icon').textContent = icons[c] || '🌡️';
+  document.getElementById('weather-temp').textContent = Math.round(d.current.temperature_2m) + '°';
+  document.getElementById('weather-desc').textContent = descs[c] || '—';
+
+  const speed = Math.round(d.current.windspeed_10m / 3.6 * 10) / 10;
+  const gusts = Math.round(d.current.windgusts_10m / 3.6 * 10) / 10;
+  const deg   = d.current.winddirection_10m;
+  const dirs  = ['N','NNØ','NØ','ØNØ','Ø','ØSØ','SØ','SSØ','S','SSV','SV','VSV','V','VNV','NV','NNV'];
+  const dirLabel = dirs[Math.round(deg / 22.5) % 16];
+  let bf = '';
+  if (speed < 1) bf = 'Stille';
+  else if (speed < 6)  bf = 'Svag vind';
+  else if (speed < 12) bf = 'Let brise';
+  else if (speed < 20) bf = 'Svag brise';
+  else if (speed < 29) bf = 'Jævn brise';
+  else if (speed < 39) bf = 'Frisk brise';
+  else if (speed < 50) bf = 'Hård vind';
+  else bf = 'Stærk vind';
+
+  document.getElementById('wind-arrow').style.transform = `rotate(${(deg + 180) % 360}deg)`;
+  document.getElementById('wind-speed').textContent = speed + ' m/s';
+  document.getElementById('wind-dir').textContent = dirLabel;
+  document.getElementById('wind-gusts').textContent = 'Vindstød ' + gusts + ' m/s';
+  document.getElementById('wind-beaufort').textContent = bf;
+}
+
+fetchWeatherWithRetry();
+setInterval(fetchWeatherWithRetry, 600000);
 
 // ─── BANEFARVER (matcher baneplanen) ───
 function getBaneColor(bane) {

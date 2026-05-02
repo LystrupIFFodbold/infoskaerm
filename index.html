@@ -219,7 +219,7 @@
     opacity: 0; transition: opacity 0.3s;
   }
   .page-indicator.visible { opacity: 1; }
-  * { cursor: none !important; }
+  .cursor-hidden, .cursor-hidden * { cursor: none !important; }
 </style>
 </head>
 <body>
@@ -732,6 +732,15 @@ function checkSchedule() {
 }
 setInterval(checkSchedule, 60000);
 checkSchedule();
+
+// ─── SKJUL CURSOR EFTER 1.5 SEK INAKTIVITET ───
+document.documentElement.classList.add('cursor-hidden');
+let _cursorTimer;
+document.addEventListener('mousemove', () => {
+  document.documentElement.classList.remove('cursor-hidden');
+  clearTimeout(_cursorTimer);
+  _cursorTimer = setTimeout(() => document.documentElement.classList.add('cursor-hidden'), 1500);
+});
 </script>
 </body>
 </html>

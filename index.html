@@ -596,8 +596,18 @@ async function fetchMatches() {
     return (ah * 60 + am) - (bh * 60 + bm);
   });
 
-  if (allMatches.length > 0) renderMatches(allMatches);
+  const todayMidnightMs = new Date(today).setHours(0,0,0,0);
+  const nowMins = today.getHours() * 60 + today.getMinutes();
+  const visibleMatches = allMatches.filter(m => {
+    const mDate = new Date(m.date); mDate.setHours(0,0,0,0);
+    if (mDate.getTime() !== todayMidnightMs) return true;
+    const [h, min] = m.time.split(':').map(Number);
+    return (h * 60 + min + 90) > nowMins;
+  });
+
+  if (visibleMatches.length > 0) renderMatches(visibleMatches);
   else renderNoMatches();
+
 }
 
 const MATCHES_PER_PAGE = 5;

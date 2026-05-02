@@ -1,0 +1,24 @@
+[
+  {
+    "date": "18-04-2026",
+    "time": "14:00",
+    "aargang": "Herrer Serie 4 - Forår 2026 · Pulje 73",
+    "homeTeam": "Lystrup IF (1)",
+    "awayTeam": "Virup IF (2)",
+    "omklædnHjem": "Omklædning 1",
+    "omklædnUde": "Omklædning 8",
+    "omklædnDommer": "Omklædning 6",
+    "bane": "Kunstgræs"
+  },
+  {
+    "date": "18-04-2026",
+    "time": "12:30",
+    "aargang": "U15",
+    "homeTeam": "Lystrup IF",
+    "awayTeam": "Spentrup IF",
+    "omklædnHjem": "Omklædning 4",
+    "omklædnUde": "Omklædning 5",
+    "omklædnDommer": "Omklædning 6",
+    "bane": "Kunstgræs"
+  }
+]

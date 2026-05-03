@@ -600,12 +600,9 @@ async function fetchMatches() {
   });
 
   const todayMidnightMs = new Date(today).setHours(0,0,0,0);
-  const nowMins = today.getHours() * 60 + today.getMinutes();
   const visibleMatches = allMatches.filter(m => {
     const mDate = new Date(m.date); mDate.setHours(0,0,0,0);
-    if (mDate.getTime() !== todayMidnightMs) return true;
-    const [h, min] = m.time.split(':').map(Number);
-    return (h * 60 + min + 90) > nowMins;
+    return mDate.getTime() >= todayMidnightMs;
   });
 
   if (visibleMatches.length > 0) renderMatches(visibleMatches);

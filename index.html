@@ -744,5 +744,9 @@ document.addEventListener('mousemove', () => {
   _cursorTimer = setTimeout(() => document.documentElement.classList.add('cursor-hidden'), 1500);
 });
 </script>
+<script>
+// Genindlæs siden hver 30. minut så kodeændringer fra GitHub slår igennem automatisk
+setTimeout(() => location.reload(), 30 * 60 * 1000);
+</script>
 </body>
 </html>

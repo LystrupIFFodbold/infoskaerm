@@ -19,10 +19,8 @@ def extract_field(html, name):
 
 
 def decode_response(raw, headers):
-    ct = headers.get('Content-Type', '')
-    if 'windows-1252' in ct or 'iso-8859' in ct.lower():
-        return raw.decode('windows-1252', errors='replace')
-    return raw.decode('utf-8', errors='replace')
+    # DBU bruger altid windows-1252 — også i AJAX delta-svar
+    return raw.decode('windows-1252', errors='replace')
 
 
 def parse_delta(text):

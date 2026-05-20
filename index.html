@@ -380,11 +380,12 @@ setInterval(fetchWeatherWithRetry, 600000);
 function getBaneColor(bane) {
   if (!bane) return { bg: '#9c1717', text: '#fff' };
   const b = bane.toUpperCase();
-  if (b.startsWith('A8'))  return { bg: '#d63031', text: '#fff' };   // Rød
+  if (b.startsWith('A8') || b.startsWith('C8'))
+                           return { bg: '#d63031', text: '#fff' };   // Rød
   if (b.startsWith('B11')) return { bg: '#27ae60', text: '#fff' };   // Grøn
   if (b.startsWith('B-MM') || b === 'BMM') return { bg: '#2980b9', text: '#fff' }; // Blå
-  if (b.startsWith('C5') || b.startsWith('C8') || b.startsWith('C3') || b.startsWith('C-'))
-                           return { bg: '#ffe83d', text: '#1a1a1a' }; // Gul
+  if (/^C[2-7]/.test(b) || b.startsWith('C-'))
+                           return { bg: '#ffe83d', text: '#1a1a1a' }; // Gul (C2–C7)
   if (b.startsWith('D3') || b.startsWith('D-'))
                            return { bg: '#00b4d8', text: '#fff' };    // Cyan/blå
   if (b.startsWith('K8') || b.startsWith('K11') || b.startsWith('K-'))
@@ -399,31 +400,8 @@ const DAY_NAMES_SHORT = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'];
 async function fetchViaProxy(targetUrl) {
   const proxies = [
     // Lokal Pi-proxy — henter alle DBU-sider uden begrænsning
-    () => fetch('http://localhost:8765/dbu', {signal: AbortSignal.timeout(35000)})
+    () => fetch('http://localhost:8765/dbu', {signal: AbortSignal.timeout(30000)})
           .then(r => { if(!r.ok) throw new Error(); return r.text(); }),
-    () => fetch('https://corsproxy.io/?' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
-          .then(r => { if(!r.ok) throw new Error(); return r.arrayBuffer(); })
-          .then(buf => new TextDecoder('windows-1252').decode(buf)),
-    () => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
-          .then(r => r.json()).then(j => {
-            let h = j.contents || '';
-            // Fix Windows-1252 double-encoding
-            h = h.replace(/Ã¦/g,'æ').replace(/Ã†/g,'Æ')
-                 .replace(/Ã¸/g,'ø').replace(/Ã˜/g,'Ø')
-                 .replace(/Ã¥/g,'å').replace(/Ã…/g,'Å')
-                 .replace(/Ã©/g,'é').replace(/Ã¦/g,'æ')
-                 // Fix single-byte mis-encoding
-                 .replace(/æ/g,'æ').replace(/Æ/g,'Æ')
-                 .replace(/ø/g,'ø').replace(/Ø/g,'Ø')
-                 .replace(/å/g,'å').replace(/Å/g,'Å')
-                 // Fix HTML entities
-                 .replace(/&aelig;/g,'æ').replace(/&AElig;/g,'Æ')
-                 .replace(/&oslash;/g,'ø').replace(/&Oslash;/g,'Ø')
-                 .replace(/&aring;/g,'å').replace(/&Aring;/g,'Å');
-            return h;
-          }),
-    () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
-          .then(r => r.arrayBuffer()).then(buf => new TextDecoder('windows-1252').decode(buf)),
   ];
   for (const attempt of proxies) {
     try { const h = await attempt(); if (h && h.length > 100) return h; } catch(e) {}
@@ -491,42 +469,32 @@ function parseMatchesFromHTML(html, defaultDate) {
     }
     const tid     = fixDansk(cells[0]?.textContent.trim());
     const aargang = fixDansk(cells[1]?.textContent.trim());
-    const hold    = fixDansk(cells[2]?.textContent.trim());
-    const omklædn = fixDansk(cells[3]?.textContent.trim());
     const bane    = fixDansk(cells[4]?.textContent.trim());
-    if (!tid || !hold) return;
+    if (!tid) return;
     const timeMatch = tid.match(/(\d{1,2}:\d{2})/);
     const startTime = timeMatch ? timeMatch[1] : tid;
-    const dashIdx = hold.indexOf(' - ');
-    let homeTeam = dashIdx >= 0 ? hold.slice(0, dashIdx).trim() : hold;
-    let awayTeam = dashIdx >= 0 ? hold.slice(dashIdx + 3).trim() : '';
-    // Strip "Dommer" og varianter fra holdnavne
+
+    // DBU bruger <br> til at separere hold og omklædning — textContent smasher dem.
+    // Erstat <br> med newline-separator inden vi parser tekst.
+    function cellLines(cell) {
+      if (!cell) return [];
+      const html = cell.innerHTML.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+      const tmp = doc.createElement('div');
+      tmp.innerHTML = html;
+      return tmp.textContent.split('\n').map(s => fixDansk(s.trim())).filter(s => s);
+    }
+
+    const holdLines = cellLines(cells[2]);
+    if (!holdLines.length) return;
+    let homeTeam = holdLines[0].replace(/-\s*$/, '').trim();
+    let awayTeam = holdLines.find(l => l !== holdLines[0] && !/^dommer$/i.test(l)) || '';
     homeTeam = homeTeam.replace(/\s*Dommer\s*$/i, '').trim();
     awayTeam = awayTeam.replace(/\s*Dommer\s*$/i, '').trim();
 
-    // Parse omklædning - DBU sender dem sammenklistret uden separator
-    // Split på ord der starter med "Omkl" (håndterer alle æ-varianter)
-    // samt på digit efterfulgt af stort bogstav (sammenklistret overgang)
-    function parseOmk(raw) {
-      if (!raw) return [];
-      // Normalisér æ-varianter til placeholder @
-      let s = raw
-        .replace(/Omklædning/gi, '|Omklædning')
-        .replace(/Omkl�dning/gi, '|Omklædning')
-        .replace(/Omkl?dning/gi, '|Omklædning')
-        .replace(/Omkl.dning/gi,      '|Omklædning')
-        .replace(/^[|]/, '');
-      // Fallback: split på digit+stort bogstav overgang
-      if (!s.includes('|')) {
-        s = s.replace(/(\d)([A-ZÆØÅ])/g, '$1|$2');
-      }
-      return s.split('|').map(x => x.trim()).filter(x => x.length > 1);
-    }
-
-    const omklædnParts  = parseOmk(omklædn);
-    const omklædnHjem   = omklædnParts[0] || '';
-    const omklædnUde    = omklædnParts[1] || '';
-    const omklædnDommer = omklædnParts.find(p => /dommer/i.test(p)) || '';
+    const omklLines = cellLines(cells[3]);
+    const omklædnHjem   = omklLines[0] || '';
+    const omklædnUde    = omklLines[1] || '';
+    const omklædnDommer = omklLines.find(p => /dommer/i.test(p)) || '';
 
     matches.push({ date: currentDate, time: startTime, aargang, homeTeam, awayTeam,
       omklædnHjem, omklædnUde, omklædnDommer, bane });

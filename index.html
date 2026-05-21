@@ -400,8 +400,28 @@ const DAY_NAMES_SHORT = ['Søn','Man','Tir','Ons','Tor','Fre','Lør'];
 async function fetchViaProxy(targetUrl) {
   const proxies = [
     // Lokal Pi-proxy — henter alle DBU-sider uden begrænsning
-    () => fetch('http://localhost:8765/dbu', {signal: AbortSignal.timeout(30000)})
+    () => fetch('http://localhost:8765/dbu', {signal: AbortSignal.timeout(10000)})
           .then(r => { if(!r.ok) throw new Error(); return r.text(); }),
+    () => fetch('https://corsproxy.io/?' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
+          .then(r => { if(!r.ok) throw new Error(); return r.arrayBuffer(); })
+          .then(buf => new TextDecoder('windows-1252').decode(buf)),
+    () => fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
+          .then(r => r.json()).then(j => {
+            let h = j.contents || '';
+            h = h.replace(/Ã¦/g,'æ').replace(/Ã†/g,'Æ')
+                 .replace(/Ã¸/g,'ø').replace(/Ã˜/g,'Ø')
+                 .replace(/Ã¥/g,'å').replace(/Ã…/g,'Å')
+                 .replace(/Ã©/g,'é')
+                 .replace(/æ/g,'æ').replace(/Æ/g,'Æ')
+                 .replace(/ø/g,'ø').replace(/Ø/g,'Ø')
+                 .replace(/å/g,'å').replace(/Å/g,'Å')
+                 .replace(/&aelig;/g,'æ').replace(/&AElig;/g,'Æ')
+                 .replace(/&oslash;/g,'ø').replace(/&Oslash;/g,'Ø')
+                 .replace(/&aring;/g,'å').replace(/&Aring;/g,'Å');
+            return h;
+          }),
+    () => fetch('https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl), {signal: AbortSignal.timeout(8000)})
+          .then(r => r.arrayBuffer()).then(buf => new TextDecoder('windows-1252').decode(buf)),
   ];
   for (const attempt of proxies) {
     try { const h = await attempt(); if (h && h.length > 100) return h; } catch(e) {}

@@ -228,7 +228,7 @@
   <!-- HEADER -->
   <header class="header">
     <div class="club-brand">
-      <img src="https://587-lystrup-if.euwest01.umbraco.io/media/1484/lif-original-logo.png" alt="Lystrup IF" class="club-logo">
+      <img src="https://587-lystrup-if.euwest01.umbraco.io/media/1484/lif-original-logo.png" alt="Lystrup IF" class="club-logo" onerror="this.style.display='none'">
       <div class="club-name">Lystrup IF Fodbold</div>
     </div>
     <div class="header-date" id="header-date">—</div>
@@ -734,7 +734,19 @@ document.addEventListener('mousemove', () => {
 </script>
 <script>
 // Genindlæs siden hver 30. minut så kodeændringer fra GitHub slår igennem automatisk
-setTimeout(() => location.reload(), 30 * 60 * 1000);
+setInterval(() => location.reload(), 30 * 60 * 1000);
+
+// Watchdog: for mange JS-fejl → genindlæs
+let _errCount = 0;
+window.onerror = function() {
+  _errCount++;
+  if (_errCount >= 5) setTimeout(() => location.reload(), 3000);
+  return true;
+};
+window.addEventListener('unhandledrejection', function() {
+  _errCount++;
+  if (_errCount >= 5) setTimeout(() => location.reload(), 3000);
+});
 </script>
 </body>
 </html>

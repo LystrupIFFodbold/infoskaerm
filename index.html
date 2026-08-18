@@ -376,7 +376,6 @@ async function fetchWeather() {
 fetchWeatherWithRetry();
 setInterval(fetchWeatherWithRetry, 600000);
 
-// ─── BANEFARVER (matcher baneplanen) ───
 function getBaneColor(bane) {
   if (!bane) return { bg: '#9c1717', text: '#fff' };
   const b = bane.toUpperCase();
@@ -387,11 +386,12 @@ function getBaneColor(bane) {
   if (/^C[2-7]/.test(b) || b.startsWith('C-'))
                            return { bg: '#ffe83d', text: '#1a1a1a' }; // Gul (C2–C7)
   if (b.startsWith('D3') || b.startsWith('D-'))
-                           return { bg: '#00b4d8', text: '#fff' };    // Cyan/blå
+    return { bg: '#00b4d8', text: '#fff' };
   if (b.startsWith('K8') || b.startsWith('K11') || b.startsWith('K-'))
-                           return { bg: '#e67e22', text: '#fff' };    // Orange
-  return { bg: '#9c1717', text: '#fff' }; // Fallback rød
+    return { bg: '#e67e22', text: '#fff' };
+  return { bg: '#9c1717', text: '#fff' };
 }
+
 
 // ─── KAMPPROGRAM — DBU (i dag) + matches.json (kommende dage) ───
 const DBU_BASE = 'https://kluboffice.dbu.dk//output/infosystemMatches.aspx?clubid=587';
